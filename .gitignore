@@ -30,3 +30,5 @@ JuliaLocalPreferences.toml
 *.pdf
 *.GEN
 *.lst
+*.txt
+*.json
