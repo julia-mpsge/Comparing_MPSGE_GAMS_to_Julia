@@ -1,5 +1,5 @@
 """ 
-    CompetitiveDirect
+    CompetitiveDirect_modify
 
 This module provides a direct translation of the GAMS code in `bigmps.gms` into 
 Julia using the MPSGE framework. Variable names have not been changed from the 
@@ -12,9 +12,9 @@ The documentation string for this function provides a detailed description of th
 # Example
 
 ```julia
-using .CompetitiveDirect
+using .CompetitiveDirect_modify
 
-M_direct = CompetitiveDirect.competitive_model(1:9, 1:11, [:L, :K], 1:11)
+M_direct = CompetitiveDirect_modify.competitive_model(1:9, 1:11, [:L, :K], 1:11)
 
 solve!(M_direct)
 df_direct = generate_report(M_direct)
@@ -24,7 +24,7 @@ df_direct |>
     x -> subset(x, :value => ByRow(==(0)))
 ```
 """
-module CompetitiveDirect
+module CompetitiveDirect_modify
 
     using MPSGE
     using DataFrames
@@ -136,7 +136,7 @@ module CompetitiveDirect
         M = MPSGEModel()
 
         @parameters(M, begin
-            TC[i=I],          ifelse(i<length(I), 1 + length(I)*.05-.05*i, 1.0000025), (description = "Trade cost of country i")
+            TC[i=I, j=J],          ifelse(i<length(I), 1 + length(I)*.05-.05*i, 1.0000025), (description = "Trade cost of country i")
             ENDOW[i=I, j=J, f=F], ifelse(f == :K, 120 - 10*j, 10*j), (description = "Country i's endowment j factor f")
             FX[f=F, g=G],         ifelse(f==:K, 120 - 10*g, 10*g),   (description = "Factor f's share in good g")
             SCALE,                1,                                 (description = "Size of fringe in countries")
@@ -168,12 +168,12 @@ module CompetitiveDirect
 
         @production(M, EX[i=I, j=J, g=G], [t=0, s=0], begin
             @output(PFX[g], 100, t)
-            @input(PX[i, j, g], 100*TC[i], s)
+            @input(PX[i, j, g], 100*TC[i,j], s)
         end)
 
         @production(M, IX[i=I, j=J, g=G], [t=0, s=0], begin
             @output(PCX[i, j, g], 100, t)
-            @input(PFX[g], 100*TC[i], s)
+            @input(PFX[g], 100*TC[i,j], s)
         end)
 
         @production(M, XX[i=I, j=J, g=G], [t=0, s=0], begin
