@@ -1,6 +1,10 @@
 using MPSGE
 using DataFrames
 
+I = 1:9
+J = 1:11
+G = 1:11
+
 
 # Translation of `bigmps.gms` into Julia style
 include("big/Competitive.jl")
@@ -8,9 +12,9 @@ using .Competitive
 
 @doc Competitive
 
-countries = [Competitive.Country(i, j) for i in 1:9, j in 1:11]
+countries = [Competitive.Country(i, j) for i in I, j in J]
 factors = [Competitive.Labor(), Competitive.Capital()]
-goods = [Competitive.Good(g) for g in 1:11]
+goods = [Competitive.Good(g) for g in G]
 
 
 M = Competitive.competitive_model(countries, factors, goods);
@@ -26,7 +30,7 @@ df |>
 include("big/CompetitiveDirect.jl")
 using .CompetitiveDirect
 
-M_direct = CompetitiveDirect.competitive_model(1:9, 1:11, [:L, :K], 1:11);
+M_direct = CompetitiveDirect.competitive_model(I, J, [:L, :K], G);
 
 solve!(M_direct)
 df_direct = generate_report(M_direct)
@@ -43,6 +47,7 @@ df_direct |>
 #
 #Welfare = value.(W)*11
 
+# Comparing the two models, they should be the same
 
 df |>
     x -> subset(x, 
@@ -56,15 +61,48 @@ df_direct |>
         :margin => ByRow(==(0)),
     ) 
 
-var = M[:Export][Competitive.Country(2,6), Competitive.Good(6)]
+
+
+
+for i=I, j=J, g=G
+    var = M[:Producer_Price][Competitive.Country(i,j), Competitive.Good(g)]
+    var_d = M_direct[:PX][i,j,g]
+
+    if abs(value(var) - value(var_d)) > 1e-10
+        println("Difference in variable for country $i, sector $j, good $g: $(value(var)) vs $(value(var_d))")
+    end
+end
+
+
+
+
+
+value.(M[:Good_Production])
+value.(M_direct[:X])
+
+
+is_fixed.(M[:World_Price])
+is_fixed.(M_direct[:PFX])
+
+
+for g∈G
+    var = M[:World_Price][Competitive.Good(g)]
+    var_d = M_direct[:PFX][g]
+
+    if abs(value(var) - value(var_d)) > 1e-10
+        println("Difference in world price for good $g: $(value(var)) vs $(value(var_d))")
+    end
+end
+
+var = M[:Producer_Price][Competitive.Country(2,2), Competitive.Good(10)]
 value(var)
-value(zero_profit(var))
 
-var_d = M_direct[:EX][2,6,6]
+var_d = M_direct[:PX][2,2,10]
 value(var_d)
-value(zero_profit(var_d))
 
 
-zero_profit(var)
+market_clearance(var)
+market_clearance(var_d)
 
-zero_profit(var_d)
+value.(M[:Trade_Cost])
+value.(M_direct[:TC])
