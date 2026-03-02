@@ -345,7 +345,7 @@ module Competitive
 
     ```julia
     @demand(M, Consumer[country = countries], begin
-        @final_demand(Utility_Price[country],             100)
+        @final_demand(Utility_Price[country],             sum(Endowment[country, factor] for factor in factors))
         @endowment(Factor_Price[country, factor=factors], Endowment[country, factor])
     end)
     ```
@@ -356,7 +356,7 @@ module Competitive
 
         @parameters(M, begin
             Trade_Cost[country = countries], 
-                    trade_cost(country),                      
+                    trade_cost(country, last_country = maximum(x -> x.trade_cost, countries)),                      
                     (description = "Trade cost of country")
             Endowment[country = countries, factor = factors], 
                     endowment(country, factor), 
