@@ -27,6 +27,8 @@ df_direct |>
 module CompetitiveDirect_modify
 
     using MPSGE
+    using JuMP
+    import MPSGE.PATHSolver
     using DataFrames
 
 
@@ -194,7 +196,91 @@ module CompetitiveDirect_modify
         fix(PFX[div(length(G),2)+1], 1)
 
         return M
+    end
+
+    function mcp_competitive_model(I::UnitRange, J::UnitRange, F::Vector{Symbol}, G::UnitRange)
+         M = Model(PATHSolver.Optimizer)
+    
+        @variables(M, begin
+            TC[i=I,j=J] in JuMP.Parameter(ifelse(i<length(I), 1 + length(I)*.05-.05*i, 1.0000025))
+            ENDOW[i=I, j=J, f=F] in JuMP.Parameter(ifelse(f == :K, 120 - 10*j, 10*j))
+            FX[f=F, g=G] in JuMP.Parameter(ifelse(f==:K, 120 - 10*g, 10*g))
+            SCALE in JuMP.Parameter(1)
+        
+            X[i=I, j=J, g=G] >= 0,   (start = 1)
+            EX[i=I, j=J, g=G] >= 0,  (start = 1)
+            IX[i=I, j=J, g=G] >= 0,  (start = 1)
+            XX[i=I, j=J, g=G] >= 0,  (start = 1)
+            W[i=I, j=J] >= 0,        (start = 1)
+        
+            PW[i=I, j=J] >= 0,       (start = 1)
+            PX[i=I, j=J, g=G] >= 0,  (start = 1)
+            PCX[i=I, j=J, g=G] >= 0, (start = 1)
+            PF[i=I, j=J, f=F] >= 0,  (start = 1)
+            PFX[g=G] >= 0,           (start = 1)
+        
+            CONS[i=I, j=J] >= 0,     (start = 120)
+        
+        end)
+        
+        
+        
+        # Cost Functions
+
+        ## X
+        @expression(M, unit_revenue_X[i=I, j=J, g=G], PX[i,j,g])
+        @expression(M, unit_cost_X[i=I, j=J, g=G],
+            prod( PF[i,j,f]^(FX[f,g]/(sum(FX[ff, g] for ff=F))) for f in F)
+        )
+
+        ## EX
+        @expression(M, unit_revenue_EX[i=I, j=J, g=G], PFX[g])
+        @expression(M, unit_cost_EX[i=I, j=J, g=G], PX[i,j,g])
+        
+
+        ## IX
+        @expression(M, unit_revenue_IX[i=I, j=J, g=G], PCX[i,j,g])
+        @expression(M, unit_cost_IX[i=I, j=J, g=G], PFX[g])
+
+        ## XX
+        @expression(M, unit_revenue_XX[i=I, j=J, g=G], PCX[i,j,g])
+        @expression(M, unit_cost_XX[i=I, j=J, g=G], PX[i,j,g])
+
+        ## W
+        @expression(M, unit_revenue_W[i=I, j=J], PW[i,j])
+        @expression(M, unit_cost_W[i=I, j=J], prod(PCX[i,j,g]^(1/length(G)) for g in G))
+
+        # Zero Profit
+
+        @constraints(M, begin
+            zero_profit_X[i=I, j=J, g=G],  sum(FX[f,g] for f in F)*unit_cost_X[i,j,g] - 100*unit_revenue_X[i,j,g]  ⟂ X[i,j,g]
+            zero_profit_EX[i=I, j=J, g=G], 100*TC[i,j]*unit_cost_EX[i,j,g] - 100*unit_revenue_EX[i,j,g] ⟂ EX[i,j,g]
+            zero_profit_IX[i=I, j=J, g=G], 100*TC[i,j]*unit_cost_IX[i,j,g] - 100*unit_revenue_IX[i,j,g] ⟂ IX[i,j,g]
+            zero_profit_XX[i=I, j=J, g=G], 100*unit_cost_XX[i,j,g] - 100*unit_revenue_XX[i,j,g] ⟂ XX[i,j,g]
+            zero_profit_W[i=I, j=J],       100*length(G)*unit_cost_W[i,j] - 100*unit_revenue_W[i,j] ⟂ W[i,j]
+        end)
+
+
+
+        # Market Clearing
+        @constraints(M, begin
+            market_clearing_PW[i=I,j=J],      100*W[i,j] - CONS[i,j]/PW[i,j] ⟂ PW[i,j]
+            market_clearing_PX[i=I,j=J,g=G],  100*X[i,j,g] - 100*TC[i,j]*EX[i,j,g] - 100*XX[i,j,g] ⟂ PX[i,j,g]
+            market_clearing_PCX[i=I,j=J,g=G], 100*IX[i,j,g] + 100*XX[i,j,g] - 100*W[i,j]*unit_cost_W[i,j]/PCX[i,j,g] ⟂ PCX[i,j,g]
+            market_clearing_PF[i=I,j=J,f=F], -sum(FX[f,g]*X[i,j,g]*unit_cost_X[i,j,g]/PF[i,j,f] for g∈G) + ENDOW[i,j,f] ⟂ PF[i,j,f]
+            market_clearing_PFX[g=G],         100*sum(EX[i,j,g] for i=I, j=J) - 100*sum(TC[i,j]*IX[i,j,g] for i=I, j=J) ⟂ PFX[g]
+        end)
+
+        # Income Balance
+
+        @constraint(M, income_CONS[i=I,j=J], 
+            CONS[i,j] - sum(PF[i,j,f]*ENDOW[i,j,f] for f in F) ⟂ CONS[i,j]
+        )
+
+        fix(PFX[div(length(G),2)+1], 1; force=true)
+        return M
 
     end
+
 end
 
