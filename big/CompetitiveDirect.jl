@@ -255,11 +255,11 @@ module CompetitiveDirect
         # Zero Profit
 
         @constraints(M, begin
-            zero_profit_X[i=I, j=J, g=G], sum(FX[f,g] for f in F)*unit_cost_X[i,j,g] - 100*unit_revenue_X[i,j,g]  ⟂ X[i,j,g]
+            zero_profit_X[i=I, j=J, g=G],  sum(FX[f,g] for f in F)*unit_cost_X[i,j,g] - 100*unit_revenue_X[i,j,g]  ⟂ X[i,j,g]
             zero_profit_EX[i=I, j=J, g=G], 100*TC[i]*unit_cost_EX[i,j,g] - 100*unit_revenue_EX[i,j,g] ⟂ EX[i,j,g]
             zero_profit_IX[i=I, j=J, g=G], 100*TC[i]*unit_cost_IX[i,j,g] - 100*unit_revenue_IX[i,j,g] ⟂ IX[i,j,g]
             zero_profit_XX[i=I, j=J, g=G], 100*unit_cost_XX[i,j,g] - 100*unit_revenue_XX[i,j,g] ⟂ XX[i,j,g]
-            zero_profit_W[i=I, j=J], 100*length(G)*unit_cost_W[i,j] - 100*unit_revenue_W[i,j] ⟂ W[i,j]
+            zero_profit_W[i=I, j=J],       100*length(G)*unit_cost_W[i,j] - 100*unit_revenue_W[i,j] ⟂ W[i,j]
         end)
 
 
