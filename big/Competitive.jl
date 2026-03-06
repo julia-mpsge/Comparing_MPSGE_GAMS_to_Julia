@@ -435,6 +435,7 @@ module Competitive
 
     end
 
+    export Country, Good, Labor, Capital
 end
 
 
