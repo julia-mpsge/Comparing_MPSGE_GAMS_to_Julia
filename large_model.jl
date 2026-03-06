@@ -21,11 +21,6 @@ M = Competitive.competitive_model(countries, factors, goods);
 solve!(M)
 df = generate_report(M)
 
-
-df |>
-    x -> subset(x, :value => ByRow(==(0)))
-
-
 # A direct translation of the GAMS code, no special Julia structures
 include("big/CompetitiveDirect.jl")
 using .CompetitiveDirect
@@ -36,73 +31,73 @@ solve!(M_direct)
 df_direct = generate_report(M_direct)
 
 
-df_direct |>
-    x -> subset(x, :value => ByRow(==(0)))
 
-#PRODX = value.(X).!=0
-#EXPORTX = value.(EX).!=0
-#IMPORTX = value.(IX).!=0
-#NONTRADEX = @. PRODX*(1-EXPORTX)*(1-IMPORTX)
-#VOT = Dict((i,j) => 100*sum(value(PFX[g]*(EX[i,j,g]*TC[i] + IX[i,j,g])/CONS[i,j]) for g in G) for i∈I, j∈J)
-#
-#Welfare = value.(W)*11
-
-# Comparing the two models, they should be the same
-
-df |>
-    x -> subset(x, 
-        :value => ByRow(==(0)),
-        :margin => ByRow(==(0)),
-    ) 
-
-df_direct |>
-    x -> subset(x, 
-        :value => ByRow(==(0)),
-        :margin => ByRow(==(0)),
-    ) 
+# Test solution from Competitive in CompetitiveDirect
+## Verify the benchmark is not balanced
+solve!(M_direct, cumulative_iteration_limit=0)
 
 
+## Update start values of M_direct with solution from M
+### Sectors
+set_start_value.(
+    M_direct[:X], 
+    [value(M[:Good_Production][Country(i,j), Good(g)]) for i in I, j in J, g in G]
+    );
 
+set_start_value.(
+    M_direct[:EX], 
+    [value(M[:Export][Country(i,j), Good(g)]) for i in I, j in J, g in G]
+    );
 
-for i=I, j=J, g=G
-    var = M[:Producer_Price][Competitive.Country(i,j), Competitive.Good(g)]
-    var_d = M_direct[:PX][i,j,g]
+set_start_value.(
+    M_direct[:IX], 
+    [value(M[:Import][Country(i,j), Good(g)]) for i in I, j in J, g in G]
+    );
 
-    if abs(value(var) - value(var_d)) > 1e-10
-        println("Difference in variable for country $i, sector $j, good $g: $(value(var)) vs $(value(var_d))")
-    end
-end
+set_start_value.(
+    M_direct[:XX], 
+    [value(M[:Supply][Country(i,j), Good(g)]) for i in I, j in J, g in G]
+    );
 
+set_start_value.(
+    M_direct[:W], 
+    [value(M[:Welfare][Country(i,j)]) for i in I, j in J]
+    );
 
+### Commodities
 
+set_start_value.(
+    M_direct[:PW], 
+    [value(M[:Utility_Price][Country(i,j)]) for i in I, j in J]
+    );
 
+set_start_value.(
+    M_direct[:PX], 
+    [value(M[:Producer_Price][Country(i,j), Good(g)]) for i in I, j in J, g in G]
+    );
 
-value.(M[:Good_Production])
-value.(M_direct[:X])
+set_start_value.(
+    M_direct[:PCX], 
+    [value(M[:Consumer_Price][Country(i,j), Good(g)]) for i in I, j in J, g in G]
+    );
 
+set_start_value.(
+    M_direct[:PF], 
+    [value(M[:Factor_Price][Country(i,j), f]) for i in I, j in J, f in factors]
+    );
 
-is_fixed.(M[:World_Price])
-is_fixed.(M_direct[:PFX])
+set_start_value.(
+    M_direct[:PFX], 
+    [value(M[:World_Price][Good(g)]) for g in G]
+    );
 
+### Consumers
 
-for g∈G
-    var = M[:World_Price][Competitive.Good(g)]
-    var_d = M_direct[:PFX][g]
+set_start_value.(
+    M_direct[:CONS], 
+    [value(M[:Consumer][Country(i,j)]) for i in I, j in J]
+    );
 
-    if abs(value(var) - value(var_d)) > 1e-10
-        println("Difference in world price for good $g: $(value(var)) vs $(value(var_d))")
-    end
-end
+## Solve M_direct at the benchmark solution
+solve!(M_direct, cumulative_iteration_limit=0)
 
-var = M[:Producer_Price][Competitive.Country(2,2), Competitive.Good(10)]
-value(var)
-
-var_d = M_direct[:PX][2,2,10]
-value(var_d)
-
-
-market_clearance(var)
-market_clearance(var_d)
-
-value.(M[:Trade_Cost])
-value.(M_direct[:TC])
