@@ -10,24 +10,22 @@ include("big/CompetitiveDirect.jl")
 using .CompetitiveDirect
 
 M_direct = CompetitiveDirect.competitive_model(I, J, [:L, :K], G);
-
 solve!(M_direct)
 
 M_mcp_d = CompetitiveDirect.mcp_competitive_model(I, J, [:L, :K], G);
-
 optimize!(M_mcp_d)
 
 include("big/CompetitiveDirect_modify.jl")
 using .CompetitiveDirect_modify
 
 M_modify = CompetitiveDirect_modify.competitive_model(I, J, [:L, :K], G);
-
 solve!(M_modify)
 
 M_mcp_m = CompetitiveDirect_modify.mcp_competitive_model(I, J, [:L, :K], G);
-
 optimize!(M_mcp_m)
 
+
+# Demonstrate the differences in the solutions
 
 var = :PCX
 
@@ -75,10 +73,9 @@ df |>
 
 
 M_direct = CompetitiveDirect.competitive_model(I, J, [:L, :K], G);
-solve!(M_direct, convergence_tolerance = 1e-12)
+solve!(M_direct)
 
 M_mcp_d = CompetitiveDirect.mcp_competitive_model(I, J, [:L, :K], G);
-JuMP.set_attribute(M_mcp_d, "convergence_tolerance", 1e-12)
 optimize!(M_mcp_d)
 
 ## Verify solutions do not match
@@ -119,7 +116,6 @@ set_start_value.(M_mcp_d[:CONS], value.(M_direct[:CONS]));
 JuMP.set_attribute(M_mcp_d, "cumulative_iteration_limit", 0)
 optimize!(M_mcp_d)
 
-solve!(M_direct)
 
 ## Verify solutions match
 
@@ -184,8 +180,6 @@ set_start_value.(M_direct[:PFX], value.(M_mcp_d[:PFX]));
 
 set_start_value.(M_direct[:CONS], value.(M_mcp_d[:CONS]));
 
-MPSGE.update_internal_start_values!(M_direct)
-
 
 ## Resolve
 solve!(M_direct, cumulative_iteration_limit=0)
@@ -232,8 +226,6 @@ set_start_value.(M_direct[:PF], value.(M_modify[:PF]));
 set_start_value.(M_direct[:PFX], value.(M_modify[:PFX]));
 
 set_start_value.(M_direct[:CONS], value.(M_modify[:CONS]));
-
-MPSGE.update_internal_start_values!(M_direct)
 
 ## Resolve
 solve!(M_direct, cumulative_iteration_limit=0)
