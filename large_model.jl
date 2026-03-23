@@ -1,44 +1,65 @@
+using Pkg
+Pkg.activate(".")
+Pkg.instantiate()
+
 using MPSGE
 using DataFrames
+
+using MPSGE.PATHSolver
+PATHSolver.c_api_License_SetString("1259252040&Courtesy&&&USR&GEN2035&5_1_2026&1000&PATH&GEN&31_12_2035&0_0_0&6000&0_0")
+
+using MPSGE.JuMP
 
 I = 1:9
 J = 1:11
 G = 1:11
 
 
+# ============================================
 # Translation of `bigmps.gms` into Julia style
-include("big/Competitive.jl")
+# ============================================
+include("large/Competitive.jl")
 using .Competitive
 
-@doc Competitive
+#@doc Competitive
 
-countries = [Competitive.Country(i, j) for i in I, j in J]
-factors = [Competitive.Labor(), Competitive.Capital()]
-goods = [Competitive.Good(g) for g in G]
+countries = [Country(i, j) for i in I, j in J]
+factors = [Labor(), Capital()]
+goods = [Good(g) for g in G]
 
 
 M = Competitive.competitive_model(countries, factors, goods);
 solve!(M)
 df = generate_report(M)
 
+# ============================================
 # A direct translation of the GAMS code, no special Julia structures
-include("big/CompetitiveDirect.jl")
+# ============================================
+include("large/CompetitiveDirect.jl")
 using .CompetitiveDirect
 
 M_direct = CompetitiveDirect.competitive_model(I, J, [:L, :K], G);
+M_direct_mcp = CompetitiveDirect.mcp_competitive_model(I, J, [:L, :K], G);
 
 solve!(M_direct)
 df_direct = generate_report(M_direct)
 
+optimize!(M_direct_mcp)
 
-
+# ==================================================
 # Test solution from Competitive in CompetitiveDirect
-## Verify the benchmark is not balanced
+# ==================================================
+
+# ==================================================
+# Step 1: Verify the benchmark is not balanced
+# ==================================================
 solve!(M_direct, cumulative_iteration_limit=0)
 
+# ==================================================
+# Step 2: Update start values of M_direct with the solution from M
+# ==================================================
 
-## Update start values of M_direct with solution from M
-### Sectors
+# Sectors
 set_start_value.(
     M_direct[:X], 
     [value(M[:Good_Production][Country(i,j), Good(g)]) for i in I, j in J, g in G]
@@ -64,7 +85,7 @@ set_start_value.(
     [value(M[:Welfare][Country(i,j)]) for i in I, j in J]
     );
 
-### Commodities
+# Commodities
 
 set_start_value.(
     M_direct[:PW], 
@@ -91,13 +112,22 @@ set_start_value.(
     [value(M[:World_Price][Good(g)]) for g in G]
     );
 
-### Consumers
+# Consumers
 
 set_start_value.(
     M_direct[:CONS], 
     [value(M[:Consumer][Country(i,j)]) for i in I, j in J]
     );
 
-## Solve M_direct at the benchmark solution
+# =========================================
+# Step 3: Solve M_direct at the benchmark solution
+# =========================================
 solve!(M_direct, cumulative_iteration_limit=0)
 
+
+
+# =========================================
+# Extracting Equations from `Competitive`
+# =========================================
+
+cost_function(M[:Good_Production][Country(1,1), Good(1)])

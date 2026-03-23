@@ -1,5 +1,5 @@
 """ 
-    CompetitiveDirect_modify
+    CompetitiveDirect
 
 This module provides a direct translation of the GAMS code in `bigmps.gms` into 
 Julia using the MPSGE framework. Variable names have not been changed from the 
@@ -12,9 +12,9 @@ The documentation string for this function provides a detailed description of th
 # Example
 
 ```julia
-using .CompetitiveDirect_modify
+using .CompetitiveDirect
 
-M_direct = CompetitiveDirect_modify.competitive_model(1:9, 1:11, [:L, :K], 1:11)
+M_direct = CompetitiveDirect.competitive_model(1:9, 1:11, [:L, :K], 1:11)
 
 solve!(M_direct)
 df_direct = generate_report(M_direct)
@@ -24,7 +24,7 @@ df_direct |>
     x -> subset(x, :value => ByRow(==(0)))
 ```
 """
-module CompetitiveDirect_modify
+module CompetitiveDirect
 
     using MPSGE
     using JuMP
@@ -136,14 +136,13 @@ module CompetitiveDirect_modify
     function competitive_model(I::UnitRange, J::UnitRange, F::Vector{Symbol}, G::UnitRange)
 
         M = MPSGEModel()
-
+        
         @parameters(M, begin
-            TC[i=I, j=J],          ifelse(i<length(I), 1 + length(I)*.05-.05*i, 1.0000025), (description = "Trade cost of country i")
+            TC[i=I],          ifelse(i<length(I), 1 + length(I)*.05-.05*i, 1.0000025), (description = "Trade cost of country i")
             ENDOW[i=I, j=J, f=F], ifelse(f == :K, 120 - 10*j, 10*j), (description = "Country i's endowment j factor f")
             FX[f=F, g=G],         ifelse(f==:K, 120 - 10*g, 10*g),   (description = "Factor f's share in good g")
             SCALE,                1,                                 (description = "Size of fringe in countries")
         end)
-
 
         @sectors(M, begin
             X[i=I,j=J ,g=G] ,  (description = "production activity for good g")
@@ -163,6 +162,10 @@ module CompetitiveDirect_modify
 
         @consumer(M, CONS[i=I,j=J], description = "Income of representative consumer in ij")
 
+
+
+
+
         @production(M, X[i=I, j=J, g=G], [t=0, s=1], begin
             @output(PX[i,j,g], 100, t)
             @input(PF[i, j, f=F], FX[f,g], s)
@@ -170,12 +173,12 @@ module CompetitiveDirect_modify
 
         @production(M, EX[i=I, j=J, g=G], [t=0, s=0], begin
             @output(PFX[g], 100, t)
-            @input(PX[i, j, g], 100*TC[i,j], s)
+            @input(PX[i, j, g], 100*TC[i], s)
         end)
 
         @production(M, IX[i=I, j=J, g=G], [t=0, s=0], begin
             @output(PCX[i, j, g], 100, t)
-            @input(PFX[g], 100*TC[i,j], s)
+            @input(PFX[g], 100*TC[i], s)
         end)
 
         @production(M, XX[i=I, j=J, g=G], [t=0, s=0], begin
@@ -196,13 +199,15 @@ module CompetitiveDirect_modify
         fix(PFX[div(length(G),2)+1], 1)
 
         return M
+
     end
+
 
     function mcp_competitive_model(I::UnitRange, J::UnitRange, F::Vector{Symbol}, G::UnitRange)
          M = Model(PATHSolver.Optimizer)
     
         @variables(M, begin
-            TC[i=I,j=J] in JuMP.Parameter(ifelse(i<length(I), 1 + length(I)*.05-.05*i, 1.0000025))
+            TC[i=I] in JuMP.Parameter(ifelse(i<length(I), 1 + length(I)*.05-.05*i, 1.0000025))
             ENDOW[i=I, j=J, f=F] in JuMP.Parameter(ifelse(f == :K, 120 - 10*j, 10*j))
             FX[f=F, g=G] in JuMP.Parameter(ifelse(f==:K, 120 - 10*g, 10*g))
             SCALE in JuMP.Parameter(1)
@@ -254,8 +259,8 @@ module CompetitiveDirect_modify
 
         @constraints(M, begin
             zero_profit_X[i=I, j=J, g=G],  sum(FX[f,g] for f in F)*unit_cost_X[i,j,g] - 100*unit_revenue_X[i,j,g]  ⟂ X[i,j,g]
-            zero_profit_EX[i=I, j=J, g=G], 100*TC[i,j]*unit_cost_EX[i,j,g] - 100*unit_revenue_EX[i,j,g] ⟂ EX[i,j,g]
-            zero_profit_IX[i=I, j=J, g=G], 100*TC[i,j]*unit_cost_IX[i,j,g] - 100*unit_revenue_IX[i,j,g] ⟂ IX[i,j,g]
+            zero_profit_EX[i=I, j=J, g=G], 100*TC[i]*unit_cost_EX[i,j,g] - 100*unit_revenue_EX[i,j,g] ⟂ EX[i,j,g]
+            zero_profit_IX[i=I, j=J, g=G], 100*TC[i]*unit_cost_IX[i,j,g] - 100*unit_revenue_IX[i,j,g] ⟂ IX[i,j,g]
             zero_profit_XX[i=I, j=J, g=G], 100*unit_cost_XX[i,j,g] - 100*unit_revenue_XX[i,j,g] ⟂ XX[i,j,g]
             zero_profit_W[i=I, j=J],       100*length(G)*unit_cost_W[i,j] - 100*unit_revenue_W[i,j] ⟂ W[i,j]
         end)
@@ -265,10 +270,10 @@ module CompetitiveDirect_modify
         # Market Clearing
         @constraints(M, begin
             market_clearing_PW[i=I,j=J],      100*W[i,j] - CONS[i,j]/PW[i,j] ⟂ PW[i,j]
-            market_clearing_PX[i=I,j=J,g=G],  100*X[i,j,g] - 100*TC[i,j]*EX[i,j,g] - 100*XX[i,j,g] ⟂ PX[i,j,g]
+            market_clearing_PX[i=I,j=J,g=G],  100*X[i,j,g] - 100*TC[i]*EX[i,j,g] - 100*XX[i,j,g] ⟂ PX[i,j,g]
             market_clearing_PCX[i=I,j=J,g=G], 100*IX[i,j,g] + 100*XX[i,j,g] - 100*W[i,j]*unit_cost_W[i,j]/PCX[i,j,g] ⟂ PCX[i,j,g]
             market_clearing_PF[i=I,j=J,f=F], -sum(FX[f,g]*X[i,j,g]*unit_cost_X[i,j,g]/PF[i,j,f] for g∈G) + ENDOW[i,j,f] ⟂ PF[i,j,f]
-            market_clearing_PFX[g=G],         100*sum(EX[i,j,g] for i=I, j=J) - 100*sum(TC[i,j]*IX[i,j,g] for i=I, j=J) ⟂ PFX[g]
+            market_clearing_PFX[g=G],         100*sum(EX[i,j,g] for i=I, j=J) - 100*sum(TC[i]*IX[i,j,g] for i=I, j=J) ⟂ PFX[g]
         end)
 
         # Income Balance
@@ -281,6 +286,5 @@ module CompetitiveDirect_modify
         return M
 
     end
-
 end
 
